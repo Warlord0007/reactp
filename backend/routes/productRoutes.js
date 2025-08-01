@@ -15,25 +15,38 @@ const storage = multer.diskStorage({
   },
 })
 
-const upload = multer({ storage: storage })
+const upload = multer({
+  storage: storage,
+  limits: {
+    fileSize: 10 * 1024 * 1024, // 10MB limit
+  },
+  fileFilter: (req, file, cb) => {
+    // Check file type
+    if (file.mimetype.startsWith("image/")) {
+      cb(null, true)
+    } else {
+      cb(new Error("Only image files are allowed!"), false)
+    }
+  },
+})
 
 // @route   GET /api/products
 // @desc    Get all products with filters, search, and pagination
 // @access  Public
 router.get("/", async (req, res) => {
   try {
-    const pageSize = Number.parseInt(req.query.pageSize) || 10
-    const page = Number.parseInt(req.query.pageNumber) || 1
-    const searchTerm = req.query.searchTerm ? req.query.searchTerm.toLowerCase() : ""
-    const category = req.query.category ? req.query.category.toLowerCase() : ""
+    const page = Number.parseInt(req.query.page) || 1
+    const limit = Number.parseInt(req.query.limit) || 12
+    const searchTerm = req.query.search ? req.query.search.toLowerCase() : ""
     const brand = req.query.brand ? req.query.brand.toLowerCase() : ""
+    const tag = req.query.tag ? req.query.tag.toLowerCase() : ""
     const minPrice = Number.parseFloat(req.query.minPrice) || 0
     const maxPrice = Number.parseFloat(req.query.maxPrice) || Number.MAX_SAFE_INTEGER
-    const isFeatured = req.query.featured === "true"
-    const sort = req.query.sort // e.g., 'price_asc', 'price_desc', 'newest', 'rating_desc'
+    const sortBy = req.query.sortBy || "name"
 
     const query = {}
 
+    // Search functionality
     if (searchTerm) {
       query.$or = [
         { name: { $regex: searchTerm, $options: "i" } },
@@ -41,203 +54,156 @@ router.get("/", async (req, res) => {
       ]
     }
 
-    if (category) {
-      query.category = { $regex: category, $options: "i" }
-    }
-
+    // Brand filter
     if (brand) {
       query.brand = { $regex: brand, $options: "i" }
     }
 
-    if (isFeatured) {
-      query.isFeatured = true
+    // Tag filter
+    if (tag) {
+      query.tag = { $regex: tag, $options: "i" }
     }
 
+    // Price range filter
     query.price = { $gte: minPrice, $lte: maxPrice }
 
-    const count = await Product.countDocuments(query)
+    const totalProducts = await Product.countDocuments(query)
+    const totalPages = Math.ceil(totalProducts / limit)
+    const skip = (page - 1) * limit
+
     let productsQuery = Product.find(query)
 
     // Sorting
-    if (sort === "price_asc") {
-      productsQuery = productsQuery.sort({ price: 1 })
-    } else if (sort === "price_desc") {
-      productsQuery = productsQuery.sort({ price: -1 })
-    } else if (sort === "newest") {
-      productsQuery = productsQuery.sort({ createdAt: -1 })
-    } else if (sort === "rating_desc") {
-      productsQuery = productsQuery.sort({ rating: -1 })
-    } else {
-      productsQuery = productsQuery.sort({ createdAt: -1 }) // Default sort
+    switch (sortBy) {
+      case "price-low":
+        productsQuery = productsQuery.sort({ price: 1 })
+        break
+      case "price-high":
+        productsQuery = productsQuery.sort({ price: -1 })
+        break
+      case "rating":
+        productsQuery = productsQuery.sort({ rating: -1 })
+        break
+      case "name":
+      default:
+        productsQuery = productsQuery.sort({ name: 1 })
+        break
     }
 
-    productsQuery = productsQuery.limit(pageSize).skip(pageSize * (page - 1))
+    productsQuery = productsQuery.limit(limit).skip(skip)
 
     const products = await productsQuery
 
+    // Return the structure that your frontend expects
     res.json({
+      success: true,
       products,
-      page,
-      pages: Math.ceil(count / pageSize),
-      totalProducts: count,
+      pagination: {
+        currentPage: page,
+        totalPages,
+        totalProducts,
+        hasNext: page < totalPages,
+        hasPrev: page > 1,
+      },
     })
   } catch (error) {
     console.error("Error fetching products:", error)
-    res.status(500).json({ message: "Server Error" })
+    res.status(500).json({ success: false, message: "Server Error" })
   }
 })
 
-// @route   GET /api/products/categories
-// @desc    Get all unique product categories
+// New route for filter options
+// @route   GET /api/products/filter-options
+// @desc    Get distinct categories, tags, and brands for filtering
 // @access  Public
-router.get("/categories", async (req, res) => {
+router.get("/filter-options", async (req, res) => {
   try {
-    const categories = await Product.distinct("category")
-    res.json({ categories })
-  } catch (error) {
-    console.error("Error fetching categories:", error)
-    res.status(500).json({ message: "Server Error" })
-  }
-})
-
-// GET recommendations based on cosine similarity
-router.get("/recommendations/:userId", async (req, res) => {
-  try {
-    const Cart = require("../models/Cart")
-    const cart = await Cart.findOne({ user: req.params.userId }).populate("items.product")
-
-    if (!cart || cart.items.length === 0) {
-      // Return featured or random products if no cart
-      const products = await Product.find({ isFeatured: true }).limit(6)
-      if (products.length < 6) {
-        const additionalProducts = await Product.find({ isFeatured: { $ne: true } }).limit(6 - products.length)
-        products.push(...additionalProducts)
-      }
-      return res.json({ success: true, recommendations: products })
-    }
-
-    // Get all products for similarity calculation
-    const allProducts = await Product.find()
-    const cartProductIds = cart.items.map((item) => item.product._id.toString())
-    const cartProducts = cart.items.map((item) => item.product)
-
-    // Create feature mappings for categorical data
-    const allBrands = [...new Set(allProducts.map((p) => p.brand))]
-    const allCategories = [...new Set(allProducts.map((p) => p.category))]
-    const allTags = [...new Set(allProducts.flatMap((p) => p.tags || []))]
-
-    // Function to create feature vector for a product
-    const createFeatureVector = (product) => {
-      const vector = []
-
-      // Price feature (normalized to 0-1 range)
-      const maxPrice = Math.max(...allProducts.map((p) => p.price))
-      const minPrice = Math.min(...allProducts.map((p) => p.price))
-      const normalizedPrice = (product.price - minPrice) / (maxPrice - minPrice || 1)
-      vector.push(normalizedPrice)
-
-      // Brand features (one-hot encoding)
-      allBrands.forEach((brand) => {
-        vector.push(product.brand === brand ? 1 : 0)
-      })
-
-      // Category features (one-hot encoding)
-      allCategories.forEach((category) => {
-        vector.push(product.category === category ? 1 : 0)
-      })
-
-      // Tag features (multi-hot encoding)
-      allTags.forEach((tag) => {
-        vector.push((product.tags || []).includes(tag) ? 1 : 0)
-      })
-
-      // Rating feature (normalized)
-      vector.push((product.rating || 0) / 5)
-
-      // Stock availability feature
-      vector.push(product.countInStock > 0 ? 1 : 0)
-
-      // Featured product feature
-      vector.push(product.isFeatured ? 1 : 0)
-
-      return vector
-    }
-
-    // Calculate cosine similarity between two vectors
-    const calculateCosineSimilarity = (vectorA, vectorB) => {
-      if (vectorA.length !== vectorB.length) return 0
-
-      // Calculate dot product (A · B)
-      let dotProduct = 0
-      for (let i = 0; i < vectorA.length; i++) {
-        dotProduct += vectorA[i] * vectorB[i]
-      }
-
-      // Calculate magnitude of vector A (||A||)
-      let magnitudeA = 0
-      for (let i = 0; i < vectorA.length; i++) {
-        magnitudeA += vectorA[i] * vectorA[i]
-      }
-      magnitudeA = Math.sqrt(magnitudeA)
-
-      // Calculate magnitude of vector B (||B||)
-      let magnitudeB = 0
-      for (let i = 0; i < vectorB.length; i++) {
-        magnitudeB += vectorB[i] * vectorB[i]
-      }
-      magnitudeB = Math.sqrt(magnitudeB)
-
-      // Avoid division by zero
-      if (magnitudeA === 0 || magnitudeB === 0) return 0
-
-      // Cosine similarity formula: (A · B) / (||A|| * ||B||)
-      return dotProduct / (magnitudeA * magnitudeB)
-    }
-
-    // Create feature vectors for cart products
-    const cartVectors = cartProducts.map(createFeatureVector)
-
-    // Calculate average cart vector (user profile)
-    const userProfileVector = new Array(cartVectors[0].length).fill(0)
-    for (let i = 0; i < userProfileVector.length; i++) {
-      let sum = 0
-      for (let j = 0; j < cartVectors.length; j++) {
-        sum += cartVectors[j][i]
-      }
-      userProfileVector[i] = sum / cartVectors.length
-    }
-
-    // Calculate similarity scores for all products not in cart
-    const productSimilarities = []
-
-    for (const product of allProducts) {
-      if (!cartProductIds.includes(product._id.toString())) {
-        const productVector = createFeatureVector(product)
-        const similarity = calculateCosineSimilarity(userProfileVector, productVector)
-
-        productSimilarities.push({
-          product: product,
-          similarity: similarity,
-        })
-      }
-    }
-
-    // Sort by similarity score (descending) and get top 6
-    productSimilarities.sort((a, b) => b.similarity - a.similarity)
-    const recommendations = productSimilarities.slice(0, 6).map((item) => item.product)
+    const brands = await Product.distinct("brand")
+    const tags = await Product.distinct("tag")
+    const categories = await Product.distinct("category") // Add this line to fetch categories
 
     res.json({
       success: true,
-      recommendations,
-      debug: {
-        cartItemsCount: cartProducts.length,
-        totalProductsAnalyzed: allProducts.length,
-        topSimilarityScore: productSimilarities[0]?.similarity || 0,
-      },
+      brands: brands.filter(Boolean), // Remove empty values
+      tags: tags.filter(Boolean), // Remove empty values
+      categories: categories.filter(Boolean), // Include categories in the response
     })
-  } catch (err) {
-    console.error("Recommendation error:", err)
-    res.status(500).json({ success: false, message: "Server error" })
+  } catch (error) {
+    console.error("Error fetching filter options:", error)
+    res.status(500).json({ success: false, message: "Server Error" })
+  }
+})
+// @route   POST /api/products
+// @desc    Create a new product (Admin only)
+// @access  Private/Admin
+router.post("/", upload.single("image"), async (req, res) => {
+  try {
+    console.log("=== PRODUCT CREATION DEBUG ===")
+    console.log("Request body:", req.body)
+    console.log("File received:", req.file) // Changed to req.file for single upload
+
+    const { name, description, price, category, brand, countInStock, isFeatured, tag } = req.body
+
+    // Validate required fields
+    if (!name || !price || !brand || !tag) {
+      return res.status(400).json({
+        message: "Missing required fields",
+        required: ["name", "price", "brand", "tag"],
+        received: { name, price, brand, tag },
+      })
+    }
+
+    // Process single image
+    const imagePath = req.file ? `/uploads/${req.file.filename}` : "" // Changed to single image path
+
+    console.log("Image path created:", imagePath)
+    console.log("Stock value received:", countInStock)
+    console.log("Stock value parsed:", Number(countInStock) || 0)
+
+    // Create product with the exact field names your schema expects
+    const productData = {
+      name: name.trim(),
+      description: description ? description.trim() : "",
+      price: Number(price),
+      brand: brand.trim(),
+      tag: tag.trim(),
+      category: category ? category.trim() : tag.trim(), // Use tag as category if not provided
+      stock: Number(countInStock) || 0, // Map countInStock to stock for your schema
+      image: imagePath, // Store as single string
+      rating: 0,
+      reviews: 0,
+      isFeatured: isFeatured === "true" || isFeatured === true,
+      createdAt: new Date(),
+    }
+
+    console.log("Product data to save:", productData)
+
+    const product = new Product(productData)
+    const createdProduct = await product.save()
+
+    console.log("Product saved successfully:", createdProduct)
+    console.log("=== END DEBUG ===")
+
+    res.status(201).json(createdProduct)
+  } catch (error) {
+    console.error("=== PRODUCT CREATION ERROR ===")
+    console.error("Error creating product:", error)
+    console.error("Error details:", error.message)
+    if (error.errors) {
+      console.error("Validation errors:", error.errors)
+    }
+    console.error("=== END ERROR DEBUG ===")
+
+    res.status(500).json({
+      message: "Server Error",
+      error: error.message,
+      details: error.errors
+        ? Object.keys(error.errors).map((key) => ({
+            field: key,
+            message: error.errors[key].message,
+          }))
+        : null,
+    })
   }
 })
 
@@ -258,40 +224,11 @@ router.get("/:id", async (req, res) => {
   }
 })
 
-// @route   POST /api/products
-// @desc    Create a new product (Admin only)
-// @access  Private/Admin
-router.post("/", protect, authorize(["admin"]), upload.array("images", 5), async (req, res) => {
-  const { name, description, price, category, brand, countInStock, isFeatured } = req.body
-
-  // Get image paths from multer
-  const imagePaths = req.files.map((file) => `/uploads/${file.filename}`)
-
-  try {
-    const product = new Product({
-      name,
-      description,
-      price,
-      category,
-      brand,
-      countInStock: Number(countInStock),
-      images: imagePaths,
-      isFeatured: isFeatured === "true", // Convert string to boolean
-    })
-
-    const createdProduct = await product.save()
-    res.status(201).json(createdProduct)
-  } catch (error) {
-    console.error("Error creating product:", error)
-    res.status(500).json({ message: "Server Error", error: error.message })
-  }
-})
-
 // @route   PUT /api/products/:id
 // @desc    Update a product (Admin only)
 // @access  Private/Admin
-router.put("/:id", protect, authorize(["admin"]), upload.array("images", 5), async (req, res) => {
-  const { name, description, price, category, brand, countInStock, isFeatured, existingImages } = req.body
+router.put("/:id", upload.single("image"), async (req, res) => {
+  const { name, description, price, category, brand, countInStock, isFeatured } = req.body
 
   try {
     const product = await Product.findById(req.params.id)
@@ -302,17 +239,16 @@ router.put("/:id", protect, authorize(["admin"]), upload.array("images", 5), asy
       product.price = price !== undefined ? Number(price) : product.price
       product.category = category || product.category
       product.brand = brand || product.brand
-      product.countInStock = countInStock !== undefined ? Number(countInStock) : product.countInStock
+      product.stock = countInStock !== undefined ? Number(countInStock) : product.stock
       product.isFeatured = isFeatured !== undefined ? isFeatured === "true" : product.isFeatured
 
-      // Handle images: combine existing images with new uploads
-      let updatedImages = []
-      if (existingImages) {
-        // existingImages might be a string if only one, or array if multiple
-        updatedImages = Array.isArray(existingImages) ? existingImages : [existingImages]
+      // Handle single image update
+      if (req.file) {
+        product.image = `/uploads/${req.file.filename}`
+      } else if (req.body.clearImage === "true") {
+        // Optional: allow clearing the image if a flag is sent
+        product.image = ""
       }
-      const newImagePaths = req.files ? req.files.map((file) => `/uploads/${file.filename}`) : []
-      product.images = [...updatedImages, ...newImagePaths]
 
       const updatedProduct = await product.save()
       res.json(updatedProduct)
@@ -328,10 +264,9 @@ router.put("/:id", protect, authorize(["admin"]), upload.array("images", 5), asy
 // @route   DELETE /api/products/:id
 // @desc    Delete a product (Admin only)
 // @access  Private/Admin
-router.delete("/:id", protect, authorize(["admin"]), async (req, res) => {
+router.delete("/:id", async (req, res) => {
   try {
     const product = await Product.findById(req.params.id)
-
     if (product) {
       await product.deleteOne()
       res.json({ message: "Product removed" })

@@ -1,5 +1,7 @@
 "use client"
 import { useState } from "react"
+import type React from "react"
+
 import { Link } from "react-router-dom"
 
 // SVG Icon Components
@@ -19,7 +21,7 @@ const ForgotPassword = () => {
   const [isLoading, setIsLoading] = useState(false)
   const [message, setMessage] = useState("")
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     setIsLoading(true)
     setMessage("")

@@ -1,9 +1,8 @@
 "use client"
-
 import { useState } from "react"
 import type React from "react"
-import { Link } from "react-router-dom";
-import { useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom"
+import { useNavigate } from "react-router-dom"
 import { User, Mail, Lock } from "lucide-react"
 
 const Register = () => {
@@ -15,13 +14,12 @@ const Register = () => {
   })
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState("")
-  const navigate = useNavigate();
+  const navigate = useNavigate()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
     setError("")
-
     try {
       // Basic validation
       if (formData.password !== formData.confirmPassword) {
@@ -47,12 +45,10 @@ const Register = () => {
       })
 
       const data = await response.json()
-
       if (response.ok && data.success) {
         // Store token in localStorage (you might want to use a more secure method)
         localStorage.setItem("token", data.token)
         localStorage.setItem("user", JSON.stringify(data.user))
-
         alert("Registration successful! You are now logged in.")
         navigate("/") // Navigate to home page
       } else {
@@ -85,7 +81,7 @@ const Register = () => {
         <h2 className="mt-6 text-center text-3xl font-bold text-gray-900">Create your account</h2>
         <p className="mt-2 text-center text-sm text-gray-600">
           Or{" "}
-          <Link href="/login" className="font-medium text-purple-600 hover:text-purple-500 transition-colors">
+          <Link to="/login" className="font-medium text-purple-600 hover:text-purple-500 transition-colors">
             sign in to your existing account
           </Link>
         </p>
@@ -94,7 +90,6 @@ const Register = () => {
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
         <div className="bg-white py-8 px-4 shadow sm:rounded-lg sm:px-10">
           {error && <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded">{error}</div>}
-
           <form className="space-y-6" onSubmit={handleSubmit}>
             <div>
               <label htmlFor="fullName" className="block text-sm font-medium text-gray-700">
@@ -191,11 +186,11 @@ const Register = () => {
               />
               <label htmlFor="agree-terms" className="ml-2 block text-sm text-gray-900">
                 I agree to the{" "}
-                <Link href="/terms-of-service" className="text-purple-600 hover:text-purple-500">
+                <Link to="/terms-of-service" className="text-purple-600 hover:text-purple-500">
                   Terms of Service
                 </Link>{" "}
                 and{" "}
-                <Link href="/privacy-policy" className="text-purple-600 hover:text-purple-500">
+                <Link to="/privacy-policy" className="text-purple-600 hover:text-purple-500">
                   Privacy Policy
                 </Link>
               </label>

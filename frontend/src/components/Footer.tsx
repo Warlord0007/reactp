@@ -1,6 +1,5 @@
 "use client"
 import { Link } from "react-router-dom"
-
 const Footer = () => {
   return (
     <footer className="bg-gray-900 text-white py-16">
@@ -235,5 +234,4 @@ const Footer = () => {
     </footer>
   )
 }
-
 export default Footer

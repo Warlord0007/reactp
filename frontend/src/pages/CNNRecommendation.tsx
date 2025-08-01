@@ -1,19 +1,50 @@
 "use client"
-
-import { useState, useEffect, useContext } from "react"
-import { AuthContext } from "../context/AuthContext"
-import ProductCard from "./ProductCard";
+import { useState, useEffect } from "react"
+import { useAuth } from "../context/AuthContext"
+import ProductCard from "../components/ProductCard"
 import axios from "axios"
 
+interface Product {
+  _id: string
+  name: string
+  price: number
+  category: string
+  images?: string[]
+  description?: string
+  brand?: string
+  rating?: number
+  reviews?: number
+}
+
+interface DebugInfo {
+  cartItemsCount: number
+  candidateProductsCount: number
+  topSimilarityScore: number
+  averageSimilarity: number
+}
+
+interface EmbeddingInfo {
+  product: Product
+  embedding: {
+    imageEmbeddingDimensions: number
+    textEmbeddingDimensions: number
+    combinedEmbeddingDimensions: number
+    imageEmbeddingPreview: number[]
+    textEmbeddingPreview: number[]
+    combinedEmbeddingPreview: number[]
+    lastUpdated: string
+  }
+}
+
 const CNNRecommendations = () => {
-  const { user } = useContext(AuthContext)
-  const [recommendations, setRecommendations] = useState([])
+  const { user } = useAuth()
+  const [recommendations, setRecommendations] = useState<Product[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
-  const [debugInfo, setDebugInfo] = useState(null)
-  const [selectedProducts, setSelectedProducts] = useState([])
-  const [similarity, setSimilarity] = useState(null)
-  const [embeddingInfo, setEmbeddingInfo] = useState(null)
+  const [debugInfo, setDebugInfo] = useState<DebugInfo | null>(null)
+  const [selectedProducts, setSelectedProducts] = useState<string[]>([])
+  const [similarity, setSimilarity] = useState<number | null>(null)
+  const [embeddingInfo, setEmbeddingInfo] = useState<EmbeddingInfo | null>(null)
   const [batchProcessing, setBatchProcessing] = useState(false)
 
   useEffect(() => {
@@ -26,10 +57,9 @@ const CNNRecommendations = () => {
     try {
       setLoading(true)
       const token = localStorage.getItem("token")
-      const response = await axios.get(`http://localhost:5000/api/cnn-recommendations/${user.id}?limit=8`, {
+      const response = await axios.get(`http://localhost:5000/api/cnn-recommendations/${user?._id}?limit=8`, {
         headers: { Authorization: `Bearer ${token}` },
       })
-
       if (response.data.success) {
         setRecommendations(response.data.recommendations)
         setDebugInfo(response.data.debug)
@@ -54,7 +84,6 @@ const CNNRecommendations = () => {
       const response = await axios.get(
         `http://localhost:5000/api/cnn-recommendations/similarity/${selectedProducts[0]}/${selectedProducts[1]}`,
       )
-
       if (response.data.success) {
         setSimilarity(response.data.similarity)
       }
@@ -64,10 +93,9 @@ const CNNRecommendations = () => {
     }
   }
 
-  const getEmbeddingInfo = async (productId) => {
+  const getEmbeddingInfo = async (productId: string) => {
     try {
       const response = await axios.get(`http://localhost:5000/api/cnn-recommendations/embedding/${productId}`)
-
       if (response.data.success) {
         setEmbeddingInfo(response.data)
       }
@@ -88,7 +116,6 @@ const CNNRecommendations = () => {
           headers: { Authorization: `Bearer ${token}` },
         },
       )
-
       if (response.data.success) {
         alert(`Successfully processed ${response.data.processed} products`)
         fetchCNNRecommendations() // Refresh recommendations
@@ -101,7 +128,7 @@ const CNNRecommendations = () => {
     }
   }
 
-  const handleProductSelect = (productId) => {
+  const handleProductSelect = (productId: string) => {
     setSelectedProducts((prev) => {
       if (prev.includes(productId)) {
         return prev.filter((id) => id !== productId)
@@ -157,7 +184,6 @@ const CNNRecommendations = () => {
               </div>
             </div>
           </div>
-
           <div className="mt-6">
             <h3 className="text-lg font-semibold text-purple-600 mb-2">Combined Embedding</h3>
             <p className="text-gray-700 mb-4">Weighted combination and L2 normalization:</p>
@@ -165,7 +191,6 @@ const CNNRecommendations = () => {
               f_combined = normalize([α × f_image, β × f_text]) where α=0.7, β=0.3
             </div>
           </div>
-
           <div className="mt-6">
             <h3 className="text-lg font-semibold text-red-600 mb-2">Enhanced Cosine Similarity</h3>
             <p className="text-gray-700 mb-4">Similarity calculation with confidence scoring:</p>
@@ -188,7 +213,6 @@ const CNNRecommendations = () => {
               >
                 {loading ? "Loading..." : "Refresh Recommendations"}
               </button>
-
               {user.role === "admin" && (
                 <button
                   onClick={batchGenerateEmbeddings}
@@ -199,7 +223,6 @@ const CNNRecommendations = () => {
                 </button>
               )}
             </div>
-
             <div className="flex items-center gap-4">
               <button
                 onClick={calculateSimilarity}
@@ -211,7 +234,6 @@ const CNNRecommendations = () => {
               <span className="text-sm text-gray-600">Selected: {selectedProducts.length}/2</span>
             </div>
           </div>
-
           {similarity !== null && (
             <div className="mt-4 p-4 bg-purple-50 rounded-lg">
               <h4 className="font-semibold text-purple-800">Similarity Score</h4>
@@ -278,7 +300,6 @@ const CNNRecommendations = () => {
                   >
                     <ProductCard product={product} />
                   </div>
-
                   <button
                     onClick={() => getEmbeddingInfo(product._id)}
                     className="absolute top-2 right-2 bg-gray-800 text-white text-xs px-2 py-1 rounded hover:bg-gray-700"
@@ -301,14 +322,12 @@ const CNNRecommendations = () => {
                   ✕
                 </button>
               </div>
-
               <div className="space-y-4">
                 <div>
                   <h4 className="font-semibold text-gray-900">Product: {embeddingInfo.product.name}</h4>
                   <p className="text-gray-600">Category: {embeddingInfo.product.category}</p>
                   <p className="text-gray-600">Brand: {embeddingInfo.product.brand}</p>
                 </div>
-
                 <div className="grid grid-cols-3 gap-4 text-center">
                   <div>
                     <div className="text-lg font-bold text-blue-600">
@@ -329,19 +348,20 @@ const CNNRecommendations = () => {
                     <div className="text-sm text-gray-600">Combined Features</div>
                   </div>
                 </div>
-
                 <div>
                   <h5 className="font-semibold mb-2">Sample Feature Values:</h5>
                   <div className="bg-gray-100 p-3 rounded text-sm font-mono">
-                    Image: [{embeddingInfo.embedding.imageEmbeddingPreview.map((v) => v.toFixed(3)).join(", ")}...]
+                    Image: [{embeddingInfo.embedding.imageEmbeddingPreview.map((v: number) => v.toFixed(3)).join(", ")}
+                    ...]
                     <br />
-                    Text: [{embeddingInfo.embedding.textEmbeddingPreview.map((v) => v.toFixed(3)).join(", ")}...]
+                    Text: [{embeddingInfo.embedding.textEmbeddingPreview.map((v: number) => v.toFixed(3)).join(", ")}
+                    ...]
                     <br />
-                    Combined: [{embeddingInfo.embedding.combinedEmbeddingPreview.map((v) => v.toFixed(3)).join(", ")}
+                    Combined: [
+                    {embeddingInfo.embedding.combinedEmbeddingPreview.map((v: number) => v.toFixed(3)).join(", ")}
                     ...]
                   </div>
                 </div>
-
                 <p className="text-sm text-gray-500">
                   Last Updated: {new Date(embeddingInfo.embedding.lastUpdated).toLocaleString()}
                 </p>

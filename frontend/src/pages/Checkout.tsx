@@ -1,16 +1,37 @@
 "use client"
-
 import { useState, useEffect } from "react"
+import type React from "react"
+
 import { useNavigate } from "react-router-dom"
 import { CreditCard, Truck, MapPin, User, Phone, Mail } from "lucide-react"
 
+interface CartItem {
+  _id: string
+  productId: string
+  name: string
+  image: string
+  price: number
+  quantity: number
+}
+
+interface ShippingInfo {
+  fullName: string
+  email: string
+  phone: string
+  address: string
+  city: string
+  state: string
+  postalCode: string
+  country: string
+}
+
 const Checkout = () => {
-  const [cartItems, setCartItems] = useState([])
+  const [cartItems, setCartItems] = useState<CartItem[]>([])
   const [loading, setLoading] = useState(true)
   const [orderLoading, setOrderLoading] = useState(false)
   const navigate = useNavigate()
 
-  const [shippingInfo, setShippingInfo] = useState({
+  const [shippingInfo, setShippingInfo] = useState<ShippingInfo>({
     fullName: "",
     email: "",
     phone: "",
@@ -38,7 +59,6 @@ const Checkout = () => {
     try {
       const response = await fetch(`http://localhost:5000/api/cart/${userData.id}`)
       const data = await response.json()
-
       if (data.success) {
         setCartItems(data.cart.items || [])
       }
@@ -61,15 +81,16 @@ const Checkout = () => {
     }
   }
 
-  const handleInputChange = (e) => {
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target
     setShippingInfo({
       ...shippingInfo,
-      [e.target.name]: e.target.value,
+      [name as keyof ShippingInfo]: value,
     })
   }
 
   const validateForm = () => {
-    const required = ["fullName", "email", "phone", "address", "city", "state", "postalCode"]
+    const required: (keyof ShippingInfo)[] = ["fullName", "email", "phone", "address", "city", "state", "postalCode"]
     return required.every((field) => shippingInfo[field].trim() !== "")
   }
 
@@ -101,9 +122,11 @@ const Checkout = () => {
   }
 
   const processCODOrder = async () => {
-    const user = JSON.parse(localStorage.getItem("user"))
-    setOrderLoading(true)
+    const userStr = localStorage.getItem("user")
+    if (!userStr) return
 
+    const user = JSON.parse(userStr)
+    setOrderLoading(true)
     try {
       const orderData = {
         userId: user.id,
@@ -128,7 +151,6 @@ const Checkout = () => {
       })
 
       const data = await response.json()
-
       if (data.success) {
         alert("Order placed successfully! You will pay on delivery.")
         navigate("/orders")
@@ -253,7 +275,7 @@ const Checkout = () => {
                     name="address"
                     value={shippingInfo.address}
                     onChange={handleInputChange}
-                    rows="3"
+                    rows={3}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                     required
                   />

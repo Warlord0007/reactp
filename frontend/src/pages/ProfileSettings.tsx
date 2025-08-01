@@ -1,7 +1,6 @@
 "use client"
 import { useState, useEffect } from "react"
 import type React from "react"
-
 import { useNavigate } from "react-router-dom"
 
 // SVG Icon Components
@@ -51,9 +50,21 @@ interface ProfileSettingsProps {
   onUpdateUser: (user: User) => void
 }
 
+interface FormData {
+  username: string
+  email: string
+  firstName: string
+  lastName: string
+  phone: string
+  address: string
+  city: string
+  zipCode: string
+  dateOfBirth: string
+}
+
 const ProfileSettings = ({ user, onUpdateUser }: ProfileSettingsProps) => {
   const navigate = useNavigate()
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<FormData>({
     username: user?.username || "",
     email: user?.email || "",
     firstName: "",
@@ -71,7 +82,6 @@ const ProfileSettings = ({ user, onUpdateUser }: ProfileSettingsProps) => {
       navigate("/login")
       return
     }
-
     // Load existing profile data from localStorage or set defaults
     const savedProfile = localStorage.getItem("userProfile")
     if (savedProfile) {
@@ -93,17 +103,14 @@ const ProfileSettings = ({ user, onUpdateUser }: ProfileSettingsProps) => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
-
     try {
       // Simulate API call delay
       await new Promise((resolve) => setTimeout(resolve, 1000))
-
       // Save profile data to localStorage
       const profileData = { ...formData }
-      delete profileData.username // Don't save username in profile data
-      delete profileData.email // Don't save email in profile data
-      localStorage.setItem("userProfile", JSON.stringify(profileData))
-
+      // Remove username and email from profile data as they're handled separately
+      const { username, email, ...profileDataToSave } = profileData
+      localStorage.setItem("userProfile", JSON.stringify(profileDataToSave))
       // Update user data
       if (user) {
         onUpdateUser({
@@ -112,7 +119,6 @@ const ProfileSettings = ({ user, onUpdateUser }: ProfileSettingsProps) => {
           email: formData.email,
         })
       }
-
       alert("Profile updated successfully!")
     } catch (error) {
       alert("Failed to update profile. Please try again.")
@@ -140,7 +146,6 @@ const ProfileSettings = ({ user, onUpdateUser }: ProfileSettingsProps) => {
           <h1 className="text-3xl font-bold text-gray-900">Profile Settings</h1>
           <p className="text-gray-600 mt-2">Manage your account information and preferences</p>
         </div>
-
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Profile Picture Section */}
           <div className="lg:col-span-1">
@@ -158,13 +163,11 @@ const ProfileSettings = ({ user, onUpdateUser }: ProfileSettingsProps) => {
               </div>
             </div>
           </div>
-
           {/* Profile Information Section */}
           <div className="lg:col-span-2">
             <div className="bg-white rounded-lg shadow-sm p-6">
               <h3 className="text-lg font-semibold text-gray-900 mb-2">Personal Information</h3>
               <p className="text-sm text-gray-600 mb-6">Update your personal details</p>
-
               <form onSubmit={handleSubmit} className="space-y-6">
                 {/* Account Information */}
                 <div className="space-y-4">
@@ -203,9 +206,7 @@ const ProfileSettings = ({ user, onUpdateUser }: ProfileSettingsProps) => {
                     </div>
                   </div>
                 </div>
-
                 <hr className="border-gray-200" />
-
                 {/* Personal Details */}
                 <div className="space-y-4">
                   <h4 className="text-md font-medium text-gray-900">Personal Details</h4>
@@ -264,9 +265,7 @@ const ProfileSettings = ({ user, onUpdateUser }: ProfileSettingsProps) => {
                     </div>
                   </div>
                 </div>
-
                 <hr className="border-gray-200" />
-
                 {/* Address Information */}
                 <div className="space-y-4">
                   <h4 className="text-md font-medium flex items-center text-gray-900">
@@ -317,9 +316,7 @@ const ProfileSettings = ({ user, onUpdateUser }: ProfileSettingsProps) => {
                     </div>
                   </div>
                 </div>
-
                 <hr className="border-gray-200" />
-
                 {/* Action Buttons */}
                 <div className="flex flex-col sm:flex-row gap-4 pt-4">
                   <button
