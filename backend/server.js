@@ -28,7 +28,26 @@ const connectDB = async () => {
   }
 }
 
-connectDB()
+// Initialize Enhanced CNN Recommendation Service
+const initializeRecommendationService = async () => {
+  try {
+    console.log("Initializing Enhanced CNN Recommendation Service...")
+    const enhancedCnnRecommendationService = require("./services/enhancedCNNRecommendationService")
+    await enhancedCnnRecommendationService.initialize()
+    console.log("✓ Enhanced CNN Recommendation Service initialized successfully")
+  } catch (error) {
+    console.error("Failed to initialize recommendation service:", error.message)
+    console.log("⚠ Recommendation service will use fallback mode")
+  }
+}
+
+// Connect to database and initialize services
+const initializeApp = async () => {
+  await connectDB()
+  await initializeRecommendationService()
+}
+
+initializeApp()
 
 // Routes
 app.use("/api/auth", require("./routes/authRoutes"))
@@ -40,13 +59,32 @@ app.use("/api/payment", require("./routes/paymentRoutes"))
 app.use("/api/orders", require("./routes/orderRoutes"))
 app.use("/api/cnn-recommendations", require("./routes/cnnRecommendationRoutes"))
 
-// Health check endpoint
-app.get("/api/health", (req, res) => {
-  res.json({
-    success: true,
-    message: "ZIIIP E-commerce API is running",
-    timestamp: new Date().toISOString(),
-  })
+// Health check endpoint with service status
+app.get("/api/health", async (req, res) => {
+  try {
+    const enhancedCnnRecommendationService = require("./services/enhancedCNNRecommendationService")
+    const serviceStatus = enhancedCnnRecommendationService.getServiceStatus()
+
+    res.json({
+      success: true,
+      message: "ZIIIP E-commerce API is running",
+      timestamp: new Date().toISOString(),
+      services: {
+        database: mongoose.connection.readyState === 1 ? "connected" : "disconnected",
+        recommendationService: serviceStatus,
+      },
+    })
+  } catch (error) {
+    res.json({
+      success: true,
+      message: "ZIIIP E-commerce API is running",
+      timestamp: new Date().toISOString(),
+      services: {
+        database: mongoose.connection.readyState === 1 ? "connected" : "disconnected",
+        recommendationService: "not available",
+      },
+    })
+  }
 })
 
 // Error handling middleware

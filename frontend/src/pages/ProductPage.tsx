@@ -1,7 +1,6 @@
 "use client"
-
 import { useState, useEffect } from "react"
-import ProductCard from "./ProductCard";
+import ProductCard from "../components/ProductCard"
 import { Search, Filter, ChevronLeft, ChevronRight } from "lucide-react"
 
 interface Product {
@@ -10,10 +9,11 @@ interface Product {
   price: number
   brand: string
   tag: string
-  image: string
+  image?: string // Changed to single image path
   description: string
   rating: number
   reviews: number
+  stock: number
 }
 
 interface Pagination {
@@ -65,15 +65,45 @@ const ProductPage = () => {
         ...(sortBy && { sortBy }),
       })
 
+      console.log("Fetching products with params:", params.toString())
+
       const response = await fetch(`http://localhost:5000/api/products?${params}`)
       const data = await response.json()
 
-      if (data.success) {
+      console.log("API Response:", data)
+
+      // Handle different response formats from your backend
+      if (data.success && data.products) {
+        // New format with success flag
         setProducts(data.products)
         setPagination(data.pagination)
+      } else if (data.products) {
+        // Format with products array and pagination info
+        setProducts(data.products)
+        setPagination({
+          currentPage: data.page || 1,
+          totalPages: data.pages || 1,
+          totalProducts: data.totalProducts || data.products.length,
+          hasNext: (data.page || 1) < (data.pages || 1),
+          hasPrev: (data.page || 1) > 1,
+        })
+      } else if (Array.isArray(data)) {
+        // Direct array format
+        setProducts(data)
+        setPagination({
+          currentPage: 1,
+          totalPages: 1,
+          totalProducts: data.length,
+          hasNext: false,
+          hasPrev: false,
+        })
+      } else {
+        console.error("Unexpected API response format:", data)
+        setProducts([])
       }
     } catch (error) {
       console.error("Error fetching products:", error)
+      setProducts([])
     } finally {
       setLoading(false)
     }
@@ -81,12 +111,35 @@ const ProductPage = () => {
 
   const fetchFilters = async () => {
     try {
+      // Try the new filters endpoint first
       const response = await fetch("http://localhost:5000/api/products/filters/options")
       const data = await response.json()
+
       if (data.success) {
-        setBrands(data.brands)
-        setTags(data.tags)
+        setBrands(data.brands || [])
+        setTags(data.tags || [])
+        return
       }
+
+      // Fallback: extract filters from all products
+      const productsResponse = await fetch("http://localhost:5000/api/products?limit=1000")
+      const productsData = await productsResponse.json()
+
+      let allProducts = []
+      if (productsData.success && productsData.products) {
+        allProducts = productsData.products
+      } else if (productsData.products) {
+        allProducts = productsData.products
+      } else if (Array.isArray(productsData)) {
+        allProducts = productsData
+      }
+
+      // Extract unique brands and tags
+      const uniqueBrands = [...new Set(allProducts.map((p: Product) => p.brand).filter(Boolean))]
+      const uniqueTags = [...new Set(allProducts.map((p: Product) => p.tag).filter(Boolean))]
+
+      setBrands(uniqueBrands)
+      setTags(uniqueTags)
     } catch (error) {
       console.error("Error fetching filters:", error)
     }
@@ -226,20 +279,20 @@ const ProductPage = () => {
 
         {/* Products Grid */}
         {loading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 mb-8">
-            {Array.from({ length: 8 }).map((_, i) => (
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4 mb-8">
+            {Array.from({ length: 12 }).map((_, i) => (
               <div key={i} className="bg-white rounded-lg p-4">
-                <div className="bg-gray-200 h-48 rounded mb-4"></div>
+                <div className="bg-gray-200 h-32 rounded mb-4"></div>
                 <div className="space-y-2">
-                  <div className="bg-gray-200 h-4 rounded w-3/4"></div>
-                  <div className="bg-gray-200 h-4 rounded w-1/2"></div>
-                  <div className="bg-gray-200 h-6 rounded w-1/4"></div>
+                  <div className="bg-gray-200 h-3 rounded w-3/4"></div>
+                  <div className="bg-gray-200 h-3 rounded w-1/2"></div>
+                  <div className="bg-gray-200 h-4 rounded w-1/4"></div>
                 </div>
               </div>
             ))}
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 mb-8">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4 mb-8">
             {products.map((product) => (
               <ProductCard key={product._id} product={product} />
             ))}

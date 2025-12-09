@@ -1,8 +1,41 @@
 "use client"
-
 import { useState, useEffect } from "react"
+import type React from "react"
+
 import { useLocation, useNavigate } from "react-router-dom"
 import { Building, Shield, ArrowLeft, CheckCircle } from "lucide-react"
+
+interface CartItem {
+  _id: string
+  productId: string
+  name: string
+  image: string
+  price: number
+  quantity: number
+}
+
+interface ShippingInfo {
+  fullName: string
+  email: string
+  phone: string
+  address: string
+  city: string
+  state: string
+  postalCode: string
+  country: string
+}
+
+interface LocationState {
+  shippingInfo: ShippingInfo
+  cartItems: CartItem[]
+  total: number
+}
+
+interface BankDetails {
+  selectedBank: string
+  accountNumber: string
+  accountHolder: string
+}
 
 const Payment = () => {
   const location = useLocation()
@@ -11,9 +44,10 @@ const Payment = () => {
   const [paymentMethod, setPaymentMethod] = useState("esewa")
   const [paymentSuccess, setPaymentSuccess] = useState(false)
 
-  const { shippingInfo, cartItems, total } = location.state || {}
+  const state = location.state as LocationState | null
+  const { shippingInfo, cartItems, total } = state || {}
 
-  const [bankDetails, setBankDetails] = useState({
+  const [bankDetails, setBankDetails] = useState<BankDetails>({
     selectedBank: "",
     accountNumber: "",
     accountHolder: "",
@@ -56,7 +90,7 @@ const Payment = () => {
     { id: "fonepay", name: "FonePay", icon: "💰" },
   ]
 
-  const handleBankInputChange = (e) => {
+  const handleBankInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     setBankDetails({
       ...bankDetails,
       [e.target.name]: e.target.value,
@@ -74,16 +108,17 @@ const Payment = () => {
 
   const processPayment = async () => {
     setLoading(true)
-
     try {
       // Simulate payment processing
       await new Promise((resolve) => setTimeout(resolve, 3000))
-
       // Create order after successful payment
-      const user = JSON.parse(localStorage.getItem("user"))
+      const userStr = localStorage.getItem("user")
+      if (!userStr) return
+
+      const user = JSON.parse(userStr)
       const orderData = {
         userId: user.id,
-        items: cartItems.map((item) => ({
+        items: cartItems?.map((item: CartItem) => ({
           productId: item.productId,
           name: item.name,
           image: item.image,
@@ -114,7 +149,6 @@ const Payment = () => {
       })
 
       const data = await response.json()
-
       if (data.success) {
         setPaymentSuccess(true)
         setTimeout(() => {
@@ -133,7 +167,6 @@ const Payment = () => {
 
   const handlePayment = () => {
     let isValid = false
-
     switch (paymentMethod) {
       case "bank":
         isValid = validateBankDetails()
@@ -164,14 +197,11 @@ const Payment = () => {
             <h2 className="text-2xl font-bold text-gray-900 mb-2">Payment Successful!</h2>
             <p className="text-gray-600">Your order has been placed successfully.</p>
           </div>
-
           <div className="bg-gray-50 rounded-lg p-4 mb-6">
             <p className="text-sm text-gray-600 mb-1">Order Total</p>
             <p className="text-2xl font-bold text-green-600">Rs{total?.toLocaleString()}</p>
           </div>
-
           <p className="text-sm text-gray-500 mb-4">Redirecting to your orders page in a few seconds...</p>
-
           <button
             onClick={() => navigate("/orders")}
             className="w-full bg-gradient-to-r from-purple-600 to-pink-600 text-white py-3 rounded-lg font-medium hover:from-purple-700 hover:to-pink-700 transition-colors"
@@ -240,7 +270,6 @@ const Payment = () => {
                     <p className="font-medium">{wallet.name}</p>
                   </button>
                 ))}
-
                 <button
                   onClick={() => setPaymentMethod("bank")}
                   className={`p-4 border-2 rounded-lg text-center transition-colors ${
@@ -262,7 +291,6 @@ const Payment = () => {
                     {paymentMethod === "khalti" && "Khalti Payment"}
                     {paymentMethod === "fonepay" && "FonePay Payment"}
                   </h3>
-
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       {paymentMethod === "esewa" && "eSewa ID *"}
@@ -277,7 +305,6 @@ const Payment = () => {
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                     />
                   </div>
-
                   <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                     <p className="text-sm text-blue-800">
                       <strong>Note:</strong> You will be redirected to{" "}
@@ -291,7 +318,6 @@ const Payment = () => {
               {paymentMethod === "bank" && (
                 <div className="space-y-4">
                   <h3 className="text-lg font-medium text-gray-900 mb-4">Bank Transfer Details</h3>
-
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Select Your Bank *</label>
                     <select
@@ -308,7 +334,6 @@ const Payment = () => {
                       ))}
                     </select>
                   </div>
-
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Account Holder Name *</label>
                     <input
@@ -320,7 +345,6 @@ const Payment = () => {
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                     />
                   </div>
-
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Account Number *</label>
                     <input
@@ -332,7 +356,6 @@ const Payment = () => {
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                     />
                   </div>
-
                   <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
                     <p className="text-sm text-yellow-800">
                       You will be redirected to your bank's secure login page to complete the payment.
@@ -357,9 +380,8 @@ const Payment = () => {
           <div className="lg:col-span-1">
             <div className="bg-white rounded-lg shadow-md p-6 sticky top-8">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Order Summary</h3>
-
               <div className="space-y-3 mb-6">
-                {cartItems?.slice(0, 3).map((item) => (
+                {cartItems?.slice(0, 3).map((item: CartItem) => (
                   <div key={item._id} className="flex items-center space-x-3">
                     <img
                       src={
@@ -377,18 +399,16 @@ const Payment = () => {
                     <span className="text-sm font-medium">Rs{(item.price * item.quantity).toLocaleString()}</span>
                   </div>
                 ))}
-                {cartItems?.length > 3 && (
+                {cartItems && cartItems.length > 3 && (
                   <p className="text-sm text-gray-500 text-center">+{cartItems.length - 3} more items</p>
                 )}
               </div>
-
               <div className="border-t pt-4 space-y-2 mb-6">
                 <div className="flex justify-between text-lg font-semibold">
                   <span>Total Amount</span>
                   <span className="text-purple-600">Rs{total?.toLocaleString()}</span>
                 </div>
               </div>
-
               <button
                 onClick={handlePayment}
                 disabled={loading}
@@ -403,7 +423,6 @@ const Payment = () => {
                   `Pay Rs${total?.toLocaleString()}`
                 )}
               </button>
-
               <p className="text-xs text-gray-500 text-center mt-3">
                 By proceeding, you agree to our Terms & Conditions
               </p>

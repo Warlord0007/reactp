@@ -7,7 +7,7 @@ const { protect } = require("../middleware/authMiddleware")
 // @route   POST /api/checkout/validate
 // @desc    Validate checkout data and calculate totals
 // @access  Private
-router.post("/validate", protect, async (req, res) => {
+router.post("/validate", async (req, res) => {
   try {
     const { shippingAddress } = req.body
     const userId = req.user.id
@@ -119,7 +119,7 @@ router.post("/validate", protect, async (req, res) => {
 // @route   GET /api/checkout/shipping-rates
 // @desc    Get shipping rates for different provinces
 // @access  Private
-router.get("/shipping-rates", protect, async (req, res) => {
+router.get("/shipping-rates", async (req, res) => {
   try {
     const shippingRates = {
       "Province 1": { standard: 150, express: 300 },
