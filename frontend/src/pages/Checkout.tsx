@@ -1,7 +1,7 @@
 "use client"
 import { useState, useEffect } from "react"
 import type React from "react"
-
+import { useLocation } from "react-router-dom";
 import { useNavigate } from "react-router-dom"
 import { CreditCard, Truck, MapPin, User, Phone, Mail } from "lucide-react"
 
@@ -30,6 +30,8 @@ const Checkout = () => {
   const [loading, setLoading] = useState(true)
   const [orderLoading, setOrderLoading] = useState(false)
   const navigate = useNavigate()
+  const location = useLocation();
+  const { finalTotal } = location.state || { finalTotal: 0 };
 
   const [shippingInfo, setShippingInfo] = useState<ShippingInfo>({
     fullName: "",
@@ -51,9 +53,12 @@ const Checkout = () => {
   const fetchCartItems = async () => {
     const user = localStorage.getItem("user")
     if (!user) {
-      navigate("/login")
-      return
-    }
+  return (
+    <div className="text-center py-10 text-xl font-semibold">
+      Please log in to continue.
+    </div>
+  );
+}
 
     const userData = JSON.parse(user)
     try {
@@ -94,76 +99,80 @@ const Checkout = () => {
     return required.every((field) => shippingInfo[field].trim() !== "")
   }
 
-  const handlePlaceOrder = async () => {
-    if (!validateForm()) {
-      alert("Please fill in all required fields")
-      return
-    }
-
-    const user = localStorage.getItem("user")
-    if (!user) {
-      navigate("/login")
-      return
-    }
-
-    if (paymentMethod === "online") {
-      // Redirect to payment page
-      navigate("/payment", {
-        state: {
-          shippingInfo,
-          cartItems,
-          total: calculateTotal().total,
-        },
-      })
-    } else {
-      // Process COD order
-      await processCODOrder()
-    }
+const handlePlaceOrder = async () => {
+  if (!validateForm()) {
+    alert("Please fill in all required fields")
+    return
   }
 
-  const processCODOrder = async () => {
-    const userStr = localStorage.getItem("user")
-    if (!userStr) return
+  const user = localStorage.getItem("user")
+  if (!user) {
+    navigate("/login")
+    return
+  }
 
-    const user = JSON.parse(userStr)
+  const userData = JSON.parse(user)
+  
+  if (paymentMethod === "online") {
+    // Redirect to payment page
+    navigate("/payment", {
+      state: {
+        shippingInfo,
+        cartItems,
+        total: calculateTotal().total,
+      },
+    })
+  } else if (paymentMethod === "cod") {
     setOrderLoading(true)
     try {
+      const totals = calculateTotal()
+
       const orderData = {
-        userId: user.id,
-        items: cartItems.map((item) => ({
-          productId: item.productId,
+        userId: userData.id, // must be valid ObjectId
+        items: cartItems.map(item => ({
+          productId: item._id, // map correct product ID
           name: item.name,
           image: item.image,
           price: item.price,
           quantity: item.quantity,
         })),
-        shippingAddress: shippingInfo,
+        shippingAddress: {
+          fullName: shippingInfo.fullName,
+          email: shippingInfo.email,
+          phone: shippingInfo.phone,
+          address: shippingInfo.address,
+          city: shippingInfo.city,
+          province: shippingInfo.state, // map 'state' → 'province'
+          postalCode: shippingInfo.postalCode,
+          country: shippingInfo.country || "Nepal",
+        },
         paymentMethod: "cod",
-        totalAmount: calculateTotal().total,
+        totalAmount: totals.total,
       }
 
-      const response = await fetch("http://localhost:5000/api/orders", {
+      const res = await fetch("http://localhost:5000/api/orders", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(orderData),
       })
 
-      const data = await response.json()
+      const data = await res.json()
       if (data.success) {
-        alert("Order placed successfully! You will pay on delivery.")
-        navigate("/orders")
+        window.alert(" Your order has been confirmed! You will pay on delivery.")
+        navigate("/order")
       } else {
-        alert("Failed to place order. Please try again.")
+        window.alert(" Failed to place order. Please try again.")
+        console.error(data)
       }
     } catch (error) {
-      console.error("Error placing order:", error)
-      alert("Failed to place order. Please try again.")
+      console.error("Error placing COD order:", error)
+      window.alert(" Failed to place order. Please try again.")
     } finally {
       setOrderLoading(false)
     }
   }
+}
+
 
   const totals = calculateTotal()
 
@@ -335,24 +344,7 @@ const Checkout = () => {
               </div>
 
               <div className="space-y-4">
-                <div className="flex items-center">
-                  <input
-                    id="online"
-                    name="payment"
-                    type="radio"
-                    value="online"
-                    checked={paymentMethod === "online"}
-                    onChange={(e) => setPaymentMethod(e.target.value)}
-                    className="h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300"
-                  />
-                  <label htmlFor="online" className="ml-3 block text-sm font-medium text-gray-700">
-                    <div className="flex items-center">
-                      <CreditCard className="w-5 h-5 mr-2 text-purple-600" />
-                      Online Payment
-                    </div>
-                    <p className="text-xs text-gray-500 mt-1">Pay via eSewa, Khalti, FonePay, or Bank Transfer</p>
-                  </label>
-                </div>
+
 
                 <div className="flex items-center">
                   <input
@@ -377,74 +369,59 @@ const Checkout = () => {
           </div>
 
           {/* Order Summary */}
-          <div className="lg:col-span-1">
-            <div className="bg-white rounded-lg shadow-md p-6 sticky top-8">
-              <h2 className="text-xl font-semibold text-gray-900 mb-6">Order Summary</h2>
+ <div className="bg-white rounded-lg shadow-sm p-6 sticky top-8">
+  <h3 className="text-lg font-semibold text-gray-900 mb-4">Order Summary</h3>
+  <div className="space-y-4">
+    {(() => {
+      // Use finalTotal from cart page or calculate total from cartItems
+      // Shipping cost: free above Rs2000, else 100
+      const shippingCost = finalTotal > 2000 ? 0 : 100
 
-              <div className="space-y-4 mb-6">
-                {cartItems.map((item) => (
-                  <div key={item._id} className="flex items-center space-x-3">
-                    <img
-                      src={
-                        item.image
-                          ? `http://localhost:5000${item.image}`
-                          : `/placeholder.svg?height=60&width=60&text=${item.name}`
-                      }
-                      alt={item.name}
-                      className="w-12 h-12 object-cover rounded-lg"
-                    />
-                    <div className="flex-1">
-                      <h4 className="text-sm font-medium text-gray-900">{item.name}</h4>
-                      <p className="text-sm text-gray-500">Qty: {item.quantity}</p>
-                    </div>
-                    <span className="text-sm font-medium text-gray-900">
-                      Rs{(item.price * item.quantity).toLocaleString()}
-                    </span>
-                  </div>
-                ))}
-              </div>
+      // Total including shipping
+      const total = finalTotal + shippingCost
 
-              <div className="border-t pt-4 space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-600">Subtotal</span>
-                  <span className="text-gray-900">Rs{totals.subtotal.toLocaleString()}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-600">Shipping</span>
-                  <span className="text-gray-900">{totals.shipping === 0 ? "Free" : `Rs${totals.shipping}`}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-600">Tax (VAT 13%)</span>
-                  <span className="text-gray-900">Rs{totals.tax.toLocaleString()}</span>
-                </div>
-                <div className="border-t pt-2 flex justify-between text-lg font-semibold">
-                  <span className="text-gray-900">Total</span>
-                  <span className="text-purple-600">Rs{totals.total.toLocaleString()}</span>
-                </div>
-              </div>
-
-              <button
-                onClick={handlePlaceOrder}
-                disabled={orderLoading || !validateForm()}
-                className="w-full mt-6 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white py-3 px-4 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {orderLoading ? (
-                  <div className="flex items-center justify-center">
-                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
-                    Processing...
-                  </div>
-                ) : (
-                  `${paymentMethod === "online" ? "Proceed to Payment" : "Place Order"} - Rs${totals.total.toLocaleString()}`
-                )}
-              </button>
-
-              {totals.subtotal < 2000 && (
-                <p className="text-xs text-gray-500 mt-2 text-center">
-                  Add Rs{(2000 - totals.subtotal).toLocaleString()} more for free shipping
-                </p>
-              )}
-            </div>
+      return (
+        <>
+          <div className="flex justify-between">
+            <span>Subtotal</span>
+            <span>Rs{finalTotal.toLocaleString()}</span>
           </div>
+
+          <div className="flex justify-between">
+            <span>Shipping</span>
+            <span className={shippingCost === 0 ? "text-green-600" : ""}>
+              {shippingCost === 0 ? "Free" : `Rs${shippingCost}`}
+            </span>
+          </div>
+
+          <hr className="border-gray-200" />
+
+          <div className="flex justify-between text-lg font-bold">
+            <span>Total</span>
+            <span className="text-purple-600">Rs{total.toLocaleString()}</span>
+          </div>
+
+          <button
+            onClick={handlePlaceOrder}
+            className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white py-3 rounded-lg font-medium transition-colors mt-4"
+            disabled={orderLoading || !validateForm()}
+          >
+            {orderLoading
+              ? "Processing..."
+              : `${paymentMethod === "online" ? "Proceed to Payment" : "Place Order"} - Rs${total.toLocaleString()}`}
+          </button>
+
+          <p className="text-xs text-gray-500 text-center mt-2">
+            Secure checkout powered by ZIIIP
+          </p>
+        </>
+      )
+    })()}
+  </div>
+</div>
+
+
+
         </div>
       </div>
     </div>

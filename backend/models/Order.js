@@ -25,10 +25,12 @@ const orderItemSchema = new mongoose.Schema({
   brand: {
     type: String,
     required: true,
+    default: "Unknown", // Default added
   },
   tag: {
     type: String,
     required: true,
+    default: "General", // Default added
   },
 })
 
@@ -87,15 +89,12 @@ const paymentDetailsSchema = new mongoose.Schema({
   paidAt: {
     type: Date,
   },
-  // For card payments
   cardLast4: {
     type: String,
   },
-  // For digital wallets
   walletId: {
     type: String,
   },
-  // For bank transfer
   bankName: {
     type: String,
   },
@@ -171,4 +170,3 @@ orderSchema.pre("save", async function (next) {
 })
 
 module.exports = mongoose.model("Order", orderSchema)
-  

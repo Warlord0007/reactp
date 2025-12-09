@@ -94,7 +94,9 @@ const CartPage: React.FC = () => {
       toast.error("Your cart is empty!")
       return
     }
-    navigate("/checkout")
+    navigate("/checkout", {
+    state: { finalTotal },
+  });
   }
 
   const totalPrice: number = getCartTotal()
@@ -301,10 +303,6 @@ const CartPage: React.FC = () => {
                       <span>-Rs{discountAmount.toLocaleString()}</span>
                     </div>
                   )}
-                  <div className="flex justify-between">
-                    <span>Shipping</span>
-                    <span className="text-green-600">Free</span>
-                  </div>
                   <div className="flex justify-between">
                     <span>Tax (13%)</span>
                     <span>Rs{taxAmount.toLocaleString()}</span>

@@ -13,6 +13,7 @@ import About from "./pages/AboutPage" // Corrected path to pages/About
 import CartPage from "./pages/CartPage"
 import ProfileSettings from "./pages/ProfileSettings"
 import Footer from "./components/Footer" // Corrected path to components/Footer
+import Checkout from "./pages/Checkout"
 
 function App() {
   return (
@@ -32,6 +33,7 @@ function App() {
               <Route path="/about" element={<About />} />
               <Route path="/cart" element={<CartPage />} />
               <Route path="/profile-settings" element={<ProfileSettings />} />
+              <Route path="/checkout" element={<Checkout />} />
             </Routes>
           </main>
           <Footer />

@@ -8,7 +8,7 @@ const { protect } = require("../middleware/authMiddleware")
 // @route   POST /api/payment/process
 // @desc    Process payment and create order
 // @access  Private
-router.post("/process", protect, async (req, res) => {
+router.post("/process", async (req, res) => {
   try {
     const { paymentMethod, paymentDetails, shippingAddress, orderSummary } = req.body
     const userId = req.user.id
@@ -126,7 +126,7 @@ router.post("/process", protect, async (req, res) => {
 // @route   GET /api/payment/methods
 // @desc    Get available payment methods
 // @access  Private
-router.get("/methods", protect, async (req, res) => {
+router.get("/methods", async (req, res) => {
   try {
     const paymentMethods = {
       digitalWallets: [
@@ -216,7 +216,7 @@ router.get("/methods", protect, async (req, res) => {
 // @route   POST /api/payment/verify
 // @desc    Verify payment status
 // @access  Private
-router.post("/verify", protect, async (req, res) => {
+router.post("/verify", async (req, res) => {
   try {
     const { transactionId, paymentMethod } = req.body
 

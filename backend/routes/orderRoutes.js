@@ -6,7 +6,7 @@ const { protect, authorize } = require("../middleware/authMiddleware")
 // @route   GET /api/orders/my-orders
 // @desc    Get logged in user's orders
 // @access  Private
-router.get("/my-orders", protect, async (req, res) => {
+router.get("/my-orders", async (req, res) => {
   try {
     const orders = await Order.find({ userId: req.user.id })
       .populate("items.productId", "name images")
@@ -28,7 +28,7 @@ router.get("/my-orders", protect, async (req, res) => {
 // @route   GET /api/orders/:orderId
 // @desc    Get order by ID
 // @access  Private
-router.get("/:orderId", protect, async (req, res) => {
+router.get("/:orderId", async (req, res) => {
   try {
     const order = await Order.findById(req.params.orderId).populate("items.productId", "name images")
 
@@ -57,6 +57,47 @@ router.get("/:orderId", protect, async (req, res) => {
       success: false,
       message: "Error fetching order",
     })
+  }
+})
+
+// @route   POST /api/orders
+// @desc    Create new order (COD or other payment methods)
+// @access  Private
+router.post("/", async (req, res) => {
+  try {
+    const { items, shippingAddress, paymentMethod, totalAmount, userId } = req.body
+
+    if (!items || items.length === 0) {
+      return res.status(400).json({ success: false, message: "Cart is empty" })
+    }
+
+    const newOrder = new Order({
+      userId,
+      items,
+      shippingAddress,
+      paymentDetails: {
+        method: paymentMethod,
+        status: paymentMethod === "cod" ? "pending" : "pending",
+      },
+      orderSummary: {
+        subtotal: items.reduce((acc, item) => acc + item.price * item.quantity, 0),
+        shippingCost: totalAmount > 5000 ? 0 : 100, // example shipping
+        vatAmount: totalAmount * 0.13, // example tax
+        totalAmount,
+      },
+      status: paymentMethod === "cod" ? "confirmed" : "pending",
+    })
+
+    await newOrder.save()
+
+    res.status(201).json({
+      success: true,
+      message: "Your order has been confirmed",
+      order: newOrder,
+    })
+  } catch (error) {
+    console.error("Error creating order:", error)
+    res.status(500).json({ success: false, message: "Failed to create order" })
   }
 })
 
@@ -165,7 +206,7 @@ router.put("/:orderId/status", protect, authorize(["admin"]), async (req, res) =
 // @route   POST /api/orders/:orderId/cancel
 // @desc    Cancel order (User can cancel pending/confirmed orders)
 // @access  Private
-router.post("/:orderId/cancel", protect, async (req, res) => {
+router.post("/:orderId/cancel", async (req, res) => {
   try {
     const { reason } = req.body
     const order = await Order.findById(req.params.orderId)
